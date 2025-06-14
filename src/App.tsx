@@ -1,14 +1,20 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { Html } from '@react-three/drei';
+
+interface FacePosition {
+  x: number;
+  y: number;
+}
 
 function useFaceTracking() {
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [facePosition, setFacePosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    let animationId;
+    let animationId: number;
 
     async function setup() {
       try {
@@ -20,15 +26,15 @@ function useFaceTracking() {
           videoRef.current.play();
         }
 
-        videoRef.current.onloadedmetadata = () => {
-          const canvas = canvasRef.current;
-          const ctx = canvas.getContext('2d');
+        videoRef.current!.onloadedmetadata = () => {
+          const canvas = canvasRef.current!;
+          const ctx = canvas.getContext('2d')!;
 
           function detectFace() {
-            if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-              canvas.width = videoRef.current.videoWidth;
-              canvas.height = videoRef.current.videoHeight;
-              ctx.drawImage(videoRef.current, 0, 0);
+            if (videoRef.current!.readyState === videoRef.current!.HAVE_ENOUGH_DATA) {
+              canvas.width = videoRef.current!.videoWidth;
+              canvas.height = videoRef.current!.videoHeight;
+              ctx.drawImage(videoRef.current!, 0, 0);
 
               const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
               const data = imageData.data;
@@ -68,8 +74,8 @@ function useFaceTracking() {
     return () => {
       if (animationId) cancelAnimationFrame(animationId);
       if (videoRef.current && videoRef.current.srcObject) {
-        const tracks = videoRef.current.srcObject.getTracks();
-        tracks.forEach(track => track.stop());
+        const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+        tracks.forEach((track: MediaStreamTrack) => track.stop());
       }
     };
   }, []);
@@ -77,27 +83,69 @@ function useFaceTracking() {
   return { facePosition, videoRef, canvasRef };
 }
 
-function TorusKnot({ facePosition }) {
+function TorusKnot({ facePosition }: { facePosition: FacePosition }) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const [horizontalSensitivity, setHorizontalSensitivity] = useState(0.5);
+  const [verticalSensitivity, setVerticalSensitivity] = useState(0.5);
+
   useFrame(() => {
     if (meshRef.current) {
-      // Flip direction and lower sensitivity
-      meshRef.current.rotation.x = -facePosition.y * 0.2 * Math.PI;
-      meshRef.current.rotation.y = -facePosition.x * 0.2 * Math.PI;
+      meshRef.current.rotation.x = facePosition.y * verticalSensitivity * Math.PI;
+      meshRef.current.rotation.y = facePosition.x * horizontalSensitivity * Math.PI;
     }
   });
+
   return (
-    <mesh ref={meshRef}>
-      <torusKnotGeometry args={[1, 0.4, 100, 16]} />
-      <meshStandardMaterial color="#ff6b6b" metalness={0.7} roughness={0.2} />
-    </mesh>
+    <>
+      <mesh ref={meshRef}>
+        <torusKnotGeometry args={[1, 0.4, 100, 16]} />
+        <meshStandardMaterial color="#ff6b6b" metalness={0.7} roughness={0.2} />
+      </mesh>
+      <Html position={[-0.7, -2, 0]}>
+        <div style={{ 
+          background: 'rgba(0,0,0,0.5)', 
+          padding: '10px', 
+          borderRadius: '5px',
+          color: 'white',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <label>Horizontal: {horizontalSensitivity.toFixed(2)}</label>
+            <input 
+              type="range" 
+              min="0.1" 
+              max="3" 
+              step="0.1" 
+              value={horizontalSensitivity}
+              onChange={(e) => setHorizontalSensitivity(parseFloat(e.target.value))}
+              style={{ width: '200px' }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <label>Vertical: {verticalSensitivity.toFixed(2)}</label>
+            <input 
+              type="range" 
+              min="0.1" 
+              max="3" 
+              step="0.1" 
+              value={verticalSensitivity}
+              onChange={(e) => setVerticalSensitivity(parseFloat(e.target.value))}
+              style={{ width: '200px' }}
+            />
+          </div>
+        </div>
+      </Html>
+    </>
   );
 }
 
 function StereoscopicView() {
   const { gl, size, scene } = useThree();
-  const leftCamera = useRef();
-  const rightCamera = useRef();
+  const leftCamera = useRef<THREE.PerspectiveCamera>(null);
+  const rightCamera = useRef<THREE.PerspectiveCamera>(null);
   const eyeSep = 0.06; // eye separation
 
   // Create cameras only once
